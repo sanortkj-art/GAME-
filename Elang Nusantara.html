@@ -1,0 +1,829 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Elang Nusantara</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: one centered column. Title, status strip, a 16:9 play field with overlay and bomb button, controls.
+   An arcade game with its own sky, so it keeps one deep-navy look on purpose. */
+:root {
+  --bg: #0b1020;
+  --panel: #162040;
+  --line: #2c3d75;
+  --paper: #eef2ff;
+  --muted: #a7b4de;
+  --amber: #ffb23e;
+  --cyan: #58e6ff;
+  --alert: #ff5470;
+  --green: #5df0a0;
+  --display: "Bungee", "Arial Black", system-ui, sans-serif;
+  --body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg);
+  color: var(--paper);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-block: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app {
+  width: 100%;
+  max-width: min(960px, max(320px, calc((100svh - 190px) * 1.778)));
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(22px, 5vw, 32px); line-height: 1.05; letter-spacing: 0.01em; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.rotate { display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 13px; color: var(--amber); }
+@media (orientation: portrait) and (max-width: 700px) { .rotate { display: block; } }
+.hud { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .hud { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cell { background: var(--panel); border-radius: 10px; padding: 6px 10px; min-width: 0; }
+.lbl { display: block; font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.val { display: block; font-family: var(--display); font-size: 17px; line-height: 1.35; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.heart { color: var(--alert); margin-right: 1px; font-size: 15px; }
+.stage { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #2f1f6b; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+canvas.playing { cursor: none; }
+.bombbtn {
+  position: absolute; right: 10px; bottom: 10px; z-index: 3;
+  width: 58px; height: 58px; border-radius: 50%; border: 2px solid var(--alert);
+  background: rgba(255, 84, 112, 0.22); color: var(--paper);
+  font-family: var(--display); font-size: 12px; line-height: 1.1; cursor: pointer;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.bombbtn b { font-size: 16px; font-weight: 400; }
+.bombbtn:active { background: rgba(255, 84, 112, 0.5); }
+.bombbtn[disabled] { opacity: 0.4; }
+.overlay {
+  position: absolute; inset: 0; z-index: 5; overflow: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 16px; text-align: center;
+  background: rgba(11, 16, 32, 0.78);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.overlay h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(24px, 5vw, 42px); line-height: 1.05; color: var(--amber); }
+.overlay p { margin: 0; max-width: 46ch; text-wrap: balance; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; text-align: left; font-size: 13.5px; }
+@media (max-width: 480px) { .legend { grid-template-columns: minmax(0, 1fr); } }
+.legend li { display: flex; gap: 8px; align-items: center; }
+.chip { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 11px; color: #10142a; }
+.small { font-size: 13px; color: var(--muted); }
+.btn { font: inherit; font-weight: 700; cursor: pointer; padding: 11px 24px; border-radius: 999px; border: 0; background: var(--amber); color: #2a1800; touch-action: manipulation; }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--paper); border: 1px solid var(--line); padding: 8px 16px; font-weight: 500; }
+.btn:focus-visible, .bombbtn:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+@media (max-height: 520px) {
+  .app { max-width: min(960px, max(320px, calc((100svh - 120px) * 1.778))); gap: 6px; }
+  body { padding-block: 8px; }
+  .sub, .hint { display: none; }
+  h1 { font-size: 18px; }
+  .val { font-size: 14px; }
+  .cell { padding: 3px 8px; }
+  .overlay { gap: 6px; padding: 10px; }
+  .overlay p, .legend { font-size: 12px; }
+}
+</style>
+
+<main class="app">
+  <header>
+    <h1>Elang Nusantara</h1>
+    <p class="sub">Terbangkan jet tempur di atas kepulauan, hancurkan drone, kalahkan bos.</p>
+  </header>
+  <div class="rotate">Putar ponsel ke mode lanskap agar layar permainan lebih lebar.</div>
+
+  <section class="hud" aria-label="Status permainan">
+    <div class="cell"><span class="lbl">Skor</span><span class="val" id="hudScore">0</span></div>
+    <div class="cell"><span class="lbl">Rekor</span><span class="val" id="hudBest">0</span></div>
+    <div class="cell"><span class="lbl">Nyawa</span><span class="val" id="hudLives"></span></div>
+    <div class="cell"><span class="lbl">Bom</span><span class="val" id="hudBombs">2</span></div>
+    <div class="cell"><span class="lbl">Senjata</span><span class="val" id="hudWeapon">Lv 1</span></div>
+    <div class="cell"><span class="lbl">Level</span><span class="val" id="hudLevel">1</span></div>
+  </section>
+
+  <div class="stage">
+    <canvas id="game" width="800" height="450" aria-label="Area pertempuran udara"></canvas>
+    <button class="bombbtn" id="btnBomb" type="button" aria-label="Ledakkan bom">BOM<b id="bombNum">2</b></button>
+    <div class="overlay" id="ov">
+      <h2 id="ovTitle">Elang Nusantara</h2>
+      <p id="ovText">Tembakan otomatis. Kamu cukup menghindar, mengumpulkan power-up, dan bertahan sampai bos di akhir tiap tiga level.</p>
+      <ul class="legend" id="ovLegend">
+        <li><span class="chip" style="background:#ffb23e">P</span>Senjata naik (sampai Lv 4)</li>
+        <li><span class="chip" style="background:#58e6ff">S</span>Perisai 8 detik</li>
+        <li><span class="chip" style="background:#ff5470">B</span>Tambah satu bom</li>
+        <li><span class="chip" style="background:#5df0a0">N</span>Tambah satu nyawa</li>
+      </ul>
+      <p class="small" id="ovCtl">Gerak: mouse, geser jari, atau panah/WASD. Bom: tombol B atau tombol BOM.</p>
+      <button class="btn" id="btnGo" type="button">Lepas Landas</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn ghost" id="btnPause" type="button">Jeda</button>
+    <button class="btn ghost" id="btnSound" type="button">Suara: nyala</button>
+  </div>
+  <p class="hint">Mouse: arahkan kursor. Layar sentuh: geser di mana saja untuk menggerakkan jet, tahan jari lain pada tombol BOM. P untuk jeda.</p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var W = 800, H = 450, HOR = H * 0.72, LEVEL_LEN = 28;
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    score: $('hudScore'), best: $('hudBest'), lives: $('hudLives'), bombs: $('hudBombs'), weapon: $('hudWeapon'), level: $('hudLevel'),
+    ov: $('ov'), ovT: $('ovTitle'), ovX: $('ovText'), ovL: $('ovLegend'), ovC: $('ovCtl'),
+    go: $('btnGo'), pause: $('btnPause'), snd: $('btnSound'), bomb: $('btnBomb'), bombNum: $('bombNum')
+  };
+  var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  var KEY = 'elang-nusantara-rekor';
+  var best = 0;
+  try { best = parseInt(localStorage.getItem(KEY), 10) || 0; } catch (e) {}
+
+  var rnd = function (a, b) { return a + Math.random() * (b - a); };
+  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  function rgba(a, al) { return 'rgba(' + (a[0] | 0) + ',' + (a[1] | 0) + ',' + (a[2] | 0) + ',' + al + ')'; }
+  function rp(n) { var s = String(Math.floor(n)), o = '', k; for (k = 0; k < s.length; k++) { if (k && (s.length - k) % 3 === 0) o += '.'; o += s.charAt(k); } return o; }
+
+  /* ---------- palettes (sunset, night, dawn) ---------- */
+  var palettes = [
+    { s0: [47, 31, 107], s1: [178, 64, 127], s2: [255, 160, 90], sun: [255, 224, 138], m1: [122, 47, 126], m2: [71, 31, 99], sea1: [255, 150, 100], sea2: [58, 30, 98], cloud: [255, 170, 190] },
+    { s0: [8, 12, 38], s1: [30, 40, 95], s2: [70, 80, 150], sun: [230, 235, 255], m1: [24, 34, 70], m2: [14, 20, 48], sea1: [60, 80, 150], sea2: [10, 16, 40], cloud: [90, 100, 170] },
+    { s0: [30, 80, 120], s1: [90, 170, 190], s2: [255, 214, 160], sun: [255, 246, 200], m1: [47, 120, 120], m2: [28, 84, 90], sea1: [255, 214, 160], sea2: [20, 80, 100], cloud: [230, 245, 245] }
+  ];
+  var cur = JSON.parse(JSON.stringify(palettes[0])), tgt = palettes[0];
+  function lerpPal(dt) {
+    var k = Math.min(1, dt * 0.9), key, i;
+    for (key in cur) for (i = 0; i < 3; i++) cur[key][i] += (tgt[key][i] - cur[key][i]) * k;
+  }
+
+  /* ---------- state ---------- */
+  var state = 'ready', time = 0, bgScroll = 0;
+  var score = 0, lives = 3, bombs = 2, weapon = 1, level = 1, levelT = 0, bossIdx = 0, boss = null, bossSpawned = false;
+  var invuln = 0, shield = 0, bombCd = 0, bombFlash = 0, shake = 0, spawnT = 1.5, streak = 0, comboT = 0, shotCount = 0, newBest = false;
+  var banner = null;
+  var P = { x: 120, y: H / 2, tx: 120, ty: H / 2, r: 7, fireT: 0 };
+  var pb = [], eb = [], en = [], pu = [], fx = [], rings = [], floats = [];
+  var keys = { left: false, right: false, up: false, down: false };
+  var BOSS_NAMES = ['Raja Drone', 'Kapal Induk', 'Naga Baja'];
+
+  var stars = [], bgClouds = [], i;
+  for (i = 0; i < 60; i++) stars.push({ x: rnd(0, W), y: rnd(0, HOR * 0.8), r: rnd(0.5, 1.5), p: rnd(0, 6.28), z: rnd(0.3, 1) });
+  for (i = 0; i < 6; i++) bgClouds.push({ x: rnd(0, W), y: rnd(20, HOR - 60), w: rnd(90, 190), h: rnd(12, 26), s: rnd(8, 22) });
+
+  /* ---------- audio ---------- */
+  var ac = null, muted = false;
+  function initAudio() {
+    try {
+      if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+      if (ac && ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  function tone(f, d, type, v, slide, delay) {
+    if (muted || !ac) return;
+    try {
+      var t = ac.currentTime + (delay || 0), o = ac.createOscillator(), g = ac.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(f, t);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
+      g.gain.setValueAtTime(v || 0.05, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); o.stop(t + d + 0.02);
+    } catch (e) {}
+  }
+
+  /* ---------- hud ---------- */
+  var last = {};
+  function setText(k, node, v) { if (last[k] !== v) { last[k] = v; node.textContent = v; } }
+  function hud() {
+    setText('s', el.score, rp(score));
+    setText('b', el.best, rp(best));
+    var h = '', j;
+    for (j = 0; j < lives; j++) h += '<span class="heart">♥︎</span>';
+    if (last.l !== h) { last.l = h; el.lives.innerHTML = h; }
+    setText('bo', el.bombs, String(bombs));
+    setText('bn', el.bombNum, String(bombs));
+    if (last.bd !== (bombs <= 0)) { last.bd = bombs <= 0; el.bomb.disabled = bombs <= 0; }
+    setText('w', el.weapon, 'Lv ' + weapon);
+    setText('lv', el.level, String(level));
+  }
+
+  /* ---------- overlay / flow ---------- */
+  function showOverlay(kind) {
+    el.ov.hidden = false;
+    if (kind === 'ready') {
+      el.ovT.textContent = 'Elang Nusantara';
+      el.ovX.textContent = 'Tembakan otomatis. Kamu cukup menghindar, mengumpulkan power-up, dan bertahan sampai bos di akhir tiap tiga level.';
+      el.ovL.hidden = false; el.ovC.hidden = false; el.go.textContent = 'Lepas Landas';
+    } else if (kind === 'paused') {
+      el.ovT.textContent = 'Jeda';
+      el.ovX.textContent = 'Permainan dihentikan sementara.';
+      el.ovL.hidden = true; el.ovC.hidden = true; el.go.textContent = 'Lanjut';
+    } else {
+      el.ovT.textContent = 'Jet Jatuh!';
+      el.ovX.textContent = 'Skor ' + rp(score) + ' · Level ' + level + ' · Rekor ' + rp(best) + (newBest ? ' · Rekor baru!' : '');
+      el.ovL.hidden = true; el.ovC.hidden = true; el.go.textContent = 'Terbang Lagi';
+    }
+    cv.classList.remove('playing');
+    if (kind !== 'ready') { try { el.go.focus({ preventScroll: true }); } catch (e) {} }
+  }
+  function setStage() { tgt = palettes[Math.floor((level - 1) / 3) % 3]; }
+  function reset() {
+    score = 0; lives = 3; bombs = 2; weapon = 1; level = 1; levelT = 0; bossIdx = 0; boss = null; bossSpawned = false;
+    invuln = 0; shield = 0; bombCd = 0; bombFlash = 0; shake = 0; spawnT = 1.5; streak = 0; comboT = 0; newBest = false;
+    pb.length = 0; eb.length = 0; en.length = 0; pu.length = 0; fx.length = 0; rings.length = 0; floats.length = 0;
+    P.x = P.tx = 120; P.y = P.ty = H / 2; P.fireT = 0.3;
+    cur = JSON.parse(JSON.stringify(palettes[0])); setStage();
+    banner = { text: 'Level 1', sub: 'Pertahankan langit', t: 2 };
+    hud();
+  }
+  function onGo() {
+    initAudio();
+    if (state === 'paused') { state = 'playing'; el.ov.hidden = true; cv.classList.add('playing'); return; }
+    reset(); state = 'playing'; el.ov.hidden = true; cv.classList.add('playing');
+    tone(440, 0.1, 'triangle', 0.06); tone(660, 0.1, 'triangle', 0.06, 0, 0.1); tone(880, 0.16, 'triangle', 0.06, 0, 0.2);
+  }
+  function togglePause() {
+    if (state === 'playing') { state = 'paused'; clearKeys(); showOverlay('paused'); }
+    else if (state === 'paused') onGo();
+  }
+  function clearKeys() { keys.left = keys.right = keys.up = keys.down = false; }
+  function gameOver() {
+    state = 'over'; clearKeys();
+    if (score > best) { best = Math.floor(score); newBest = true; try { localStorage.setItem(KEY, String(best)); } catch (e) {} }
+    tone(330, 0.3, 'sawtooth', 0.07, -120); tone(220, 0.35, 'sawtooth', 0.07, -90, 0.25); tone(130, 0.6, 'sawtooth', 0.07, -50, 0.55);
+    hud(); showOverlay('over');
+  }
+
+  /* ---------- effects ---------- */
+  var BOOM = ['#ffb23e', '#ff5470', '#fff3a0'];
+  function explode(x, y, size) {
+    var n = Math.round(size * 0.9 + 6), k;
+    if (fx.length > 380) n = 4;
+    for (k = 0; k < n; k++) {
+      var a = rnd(0, 6.283), s = rnd(40, 90 + size * 6), life = rnd(0.3, 0.75);
+      fx.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: life, max: life, c: BOOM[k % 3], s: rnd(1.5, 2 + size * 0.12) });
+    }
+    rings.push({ x: x, y: y, r: 4, max: size * 2.4 + 14, life: 0.35, ml: 0.35 });
+    tone(rnd(110, 170), 0.2 + size * 0.01, 'sawtooth', 0.04, -70);
+  }
+  function floatText(x, y, text, c) { floats.push({ x: x, y: y, text: text, c: c, life: 1 }); }
+
+  /* ---------- enemies ---------- */
+  var DEFS = { drone: { r: 12, hp: 1, score: 100 }, jet: { r: 15, hp: 3, score: 250 }, dart: { r: 11, hp: 2, score: 180 }, ship: { r: 28, hp: 14, score: 700 } };
+  function mk(type, x, y) {
+    var d = DEFS[type], hp = d.hp + (type === 'drone' ? 0 : Math.floor(level / 4));
+    var e = { type: type, x: x, y: y, y0: y, r: d.r, hp: hp, score: d.score, t: 0, flash: 0, seed: rnd(0, 6), fireT: rnd(0.8, 1.8), dead: false, lock: false, vx: -1, vy: 0, sp: 0, hx: W - rnd(110, 260) };
+    en.push(e); return e;
+  }
+  function spawnDrones() {
+    var n = 4 + Math.min(3, Math.floor(level / 2)), y0 = rnd(70, HOR - 30), k;
+    for (k = 0; k < n; k++) { var e = mk('drone', W + 30 + k * 44, y0); e.seed = k * 0.5; }
+  }
+  function spawnJet() { mk('jet', W + 30, rnd(110, H - 130)); }
+  function spawnDarts() { var n = 2 + (level > 4 ? 1 : 0), k; for (k = 0; k < n; k++) mk('dart', W + 30 + k * 36, rnd(40, H - 40)); }
+  function spawnShip() { var c = 0, k; for (k = 0; k < en.length; k++) if (en[k].type === 'ship') c++; if (c < 2) mk('ship', W + 50, rnd(120, H - 120)); }
+  function director(dt) {
+    spawnT -= dt; if (spawnT > 0) return;
+    var r = Math.random();
+    if (r < 0.38) spawnDrones();
+    else if (r < 0.62) spawnJet();
+    else if (r < 0.8) spawnDarts();
+    else if (level >= 2 && r < 0.93) spawnShip();
+    else spawnJet();
+    spawnT = Math.max(0.8, 2.3 - level * 0.12) * rnd(0.8, 1.2);
+  }
+  function bullet(x, y, a, sp, r) { eb.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: r || 4 }); }
+  function aimAngle(x, y) { return Math.atan2(P.y - y, P.x - x); }
+  function aimShot(e, sp) { bullet(e.x - 8, e.y, aimAngle(e.x, e.y), sp); }
+  function spreadShot(e, n, spread, sp) { var base = aimAngle(e.x, e.y), k; for (k = 0; k < n; k++) bullet(e.x - 10, e.y, base + (k - (n - 1) / 2) * spread, sp); }
+
+  function updateEnemy(e, dt) {
+    e.t += dt; if (e.flash > 0) e.flash -= dt;
+    if (e.type === 'drone') {
+      e.x -= (120 + level * 5) * dt; e.y = e.y0 + Math.sin(e.t * 3 + e.seed) * 45;
+      if (level >= 4 && Math.random() < dt * 0.15 && e.x < W - 30) aimShot(e, 200);
+    } else if (e.type === 'jet') {
+      e.x -= 105 * dt; e.y = clamp(e.y0 + Math.sin(e.t * 2) * 90, 30, H - 30);
+      e.fireT -= dt;
+      if (e.fireT <= 0 && e.x < W - 40) { aimShot(e, 210 + level * 6); e.fireT = Math.max(1, 2.4 - level * 0.1); }
+    } else if (e.type === 'dart') {
+      if (!e.lock) {
+        e.x -= 150 * dt;
+        if (e.x < W * 0.8) { e.lock = true; var a = aimAngle(e.x, e.y); e.vx = Math.cos(a); e.vy = Math.sin(a); e.sp = 180; }
+      } else { e.sp += 220 * dt; e.x += e.vx * e.sp * dt; e.y += e.vy * e.sp * dt; }
+    } else if (e.type === 'ship') {
+      if (e.x > e.hx) e.x -= 90 * dt; else e.y = clamp(e.y0 + Math.sin(e.t * 1.1) * 80, 40, H - 40);
+      e.fireT -= dt;
+      if (e.fireT <= 0 && e.x < W - 30) { spreadShot(e, 3, 0.22, 200 + level * 5); e.fireT = Math.max(1.1, 2.0 - level * 0.06); }
+    }
+    if (e.x < -70 || e.y < -90 || e.y > H + 90 || e.x > W + 160) e.dead = true;
+  }
+
+  function dropPickup(x, y, force) {
+    if (!force && Math.random() > 0.13) return;
+    var r = Math.random(), type = r < 0.4 ? 'P' : r < 0.6 ? 'S' : r < 0.8 ? 'B' : 'N';
+    pu.push({ x: x, y: y, type: type, r: 13, t: 0 });
+  }
+  function killEnemy(e) {
+    if (e.dead) return;
+    e.dead = true;
+    streak++; comboT = 2.5;
+    var mult = Math.min(1 + Math.floor(streak / 5), 5), pts = e.score * mult;
+    score += pts;
+    floatText(e.x, e.y - 10, '+' + pts, '#ffd780');
+    explode(e.x, e.y, e.r);
+    if (e.type === 'ship') dropPickup(e.x, e.y, Math.random() < 0.5); else dropPickup(e.x, e.y, false);
+  }
+
+  /* ---------- boss ---------- */
+  function spawnBoss() {
+    bossIdx++; bossSpawned = true;
+    var hp = 100 + 60 * bossIdx;
+    boss = { x: W + 90, y: H / 2, r: 44, hp: hp, max: hp, t: 0, state: 'enter', fireT: 1.2, patT: 0, rot: 0, spT: 6, flash: 0, dying: false, dieT: 0, expT: 0, name: BOSS_NAMES[(bossIdx - 1) % BOSS_NAMES.length] };
+    banner = { text: 'Peringatan!', sub: boss.name + ' mendekat', t: 2.2 };
+    tone(220, 0.3, 'square', 0.06); tone(220, 0.3, 'square', 0.06, 0, 0.4); tone(220, 0.3, 'square', 0.06, 0, 0.8);
+  }
+  function updateBoss(dt) {
+    var b = boss;
+    b.t += dt; if (b.flash > 0) b.flash -= dt;
+    if (b.dying) {
+      b.dieT -= dt; b.expT -= dt;
+      if (b.expT <= 0) { explode(b.x + rnd(-40, 40), b.y + rnd(-34, 34), rnd(14, 28)); b.expT = 0.09; shake = 0.25; }
+      if (b.dieT <= 0) {
+        var pts = 5000 * bossIdx; score += pts;
+        floatText(b.x, b.y, '+' + rp(pts), '#ffd780');
+        explode(b.x, b.y, 50); dropPickup(b.x - 20, b.y - 20, true); dropPickup(b.x + 10, b.y + 20, true);
+        boss = null; shake = 0.5; bombFlash = 0.4;
+        nextLevel();
+      }
+      return;
+    }
+    if (b.state === 'enter') { b.x -= 90 * dt; if (b.x <= W - 120) b.state = 'fight'; return; }
+    b.y = H / 2 + Math.sin(b.t * 0.9) * 120; b.x = W - 120 + Math.sin(b.t * 0.5) * 18;
+    var enr = b.hp < b.max * 0.5, pat;
+    b.fireT -= dt; b.patT += dt;
+    pat = Math.floor(b.patT / 5) % 3;
+    if (b.fireT <= 0) {
+      if (pat === 0) { var n = 14, k, off = b.rot; b.rot += 0.21; for (k = 0; k < n; k++) bullet(b.x - 10, b.y, off + k * 6.283 / n, 150 + bossIdx * 8, 4.5); b.fireT = enr ? 1.0 : 1.4; }
+      else if (pat === 1) { spreadShot(b, 3, 0.2, 230 + bossIdx * 8); b.fireT = enr ? 0.38 : 0.55; }
+      else { bullet(b.x - 30, b.y, Math.PI + Math.sin(b.t * 3) * 0.7, 220, 4); b.fireT = enr ? 0.09 : 0.13; }
+    }
+    if (enr) {
+      b.spT -= dt;
+      if (b.spT <= 0) { var d1 = mk('drone', b.x - 50, b.y - 30), d2 = mk('drone', b.x - 50, b.y + 30); d1.y0 = b.y - 30; d2.y0 = b.y + 30; b.spT = 6; }
+    }
+  }
+  function nextLevel() {
+    level++; levelT = 0; bossSpawned = false; spawnT = 2;
+    bombs = Math.min(bombs + 1, 5);
+    setStage();
+    banner = { text: 'Level ' + level, sub: 'Bom bertambah satu', t: 2 };
+    tone(523, 0.1, 'triangle', 0.06); tone(659, 0.1, 'triangle', 0.06, 0, 0.1); tone(784, 0.16, 'triangle', 0.06, 0, 0.2);
+    hud();
+  }
+
+  /* ---------- player actions ---------- */
+  function firePlayer() {
+    var x = P.x + 20, y = P.y;
+    function b(a, oy) { pb.push({ x: x, y: y + oy, vx: Math.cos(a) * 680, vy: Math.sin(a) * 680, r: 3, dmg: 1, dead: false }); }
+    if (weapon === 1) b(0, 0);
+    else if (weapon === 2) { b(0, -6); b(0, 6); }
+    else if (weapon === 3) { b(0, 0); b(-0.13, -3); b(0.13, 3); }
+    else { b(0, 0); b(-0.13, -3); b(0.13, 3); b(-0.28, -5); b(0.28, 5); }
+    shotCount++;
+    if (shotCount % 4 === 0) tone(880, 0.05, 'square', 0.012, -300);
+  }
+  function useBomb() {
+    if (state !== 'playing' || bombs <= 0 || bombCd > 0) return;
+    bombs--; bombCd = 0.8; bombFlash = 0.6; shake = 0.5;
+    eb.length = 0;
+    var k;
+    for (k = 0; k < en.length; k++) { var e = en[k]; e.hp -= 12; e.flash = 0.15; if (e.hp <= 0) killEnemy(e); }
+    if (boss && !boss.dying) { boss.hp -= 25; boss.flash = 0.15; checkBossDead(); }
+    rings.push({ x: P.x, y: P.y, r: 10, max: 700, life: 0.6, ml: 0.6 });
+    tone(90, 0.7, 'sawtooth', 0.09, -50); tone(200, 0.5, 'square', 0.05, -150, 0.05);
+    hud();
+  }
+  function checkBossDead() {
+    if (boss && !boss.dying && boss.hp <= 0) { boss.dying = true; boss.dieT = 1.4; boss.expT = 0; eb.length = 0; }
+  }
+  function hurtPlayer() {
+    if (invuln > 0 || shield > 0) return;
+    lives--; invuln = 2.2; shake = 0.4; streak = 0;
+    weapon = Math.max(1, weapon - 1);
+    explode(P.x, P.y, 16);
+    var k; for (k = eb.length - 1; k >= 0; k--) if (Math.hypot(eb[k].x - P.x, eb[k].y - P.y) < 110) eb.splice(k, 1);
+    tone(160, 0.4, 'sawtooth', 0.09, -100);
+    hud();
+    if (lives <= 0) gameOver();
+  }
+  function collect(u) {
+    if (u.type === 'P') {
+      if (weapon < 4) { weapon++; floatText(u.x, u.y - 12, 'Senjata Lv ' + weapon, '#ffb23e'); }
+      else { score += 500; floatText(u.x, u.y - 12, '+500', '#ffb23e'); }
+    } else if (u.type === 'S') { shield = 8; floatText(u.x, u.y - 12, 'Perisai!', '#58e6ff'); }
+    else if (u.type === 'B') { bombs = Math.min(bombs + 1, 5); floatText(u.x, u.y - 12, '+1 Bom', '#ff5470'); }
+    else { if (lives < 5) lives++; else score += 500; floatText(u.x, u.y - 12, '+1 Nyawa', '#5df0a0'); }
+    tone(660, 0.08, 'triangle', 0.06); tone(990, 0.12, 'triangle', 0.06, 0, 0.08);
+    hud();
+  }
+
+  /* ---------- update ---------- */
+  function bgUpdate(dt) {
+    bgScroll += dt * 60 * (1 + level * 0.04);
+    for (var j = 0; j < bgClouds.length; j++) {
+      var c = bgClouds[j]; c.x -= c.s * dt * (1 + level * 0.04);
+      if (c.x < -c.w) { c.x = W + c.w; c.y = rnd(20, HOR - 60); }
+    }
+  }
+  function fxUpdate(dt) {
+    var j;
+    for (j = fx.length - 1; j >= 0; j--) { var f = fx[j]; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.98; f.vy *= 0.98; f.life -= dt; if (f.life <= 0) fx.splice(j, 1); }
+    for (j = rings.length - 1; j >= 0; j--) { var r = rings[j]; r.life -= dt; r.r = r.max * (1 - r.life / r.ml); if (r.life <= 0) rings.splice(j, 1); }
+    for (j = floats.length - 1; j >= 0; j--) { var q = floats[j]; q.y -= 26 * dt; q.life -= dt; if (q.life <= 0) floats.splice(j, 1); }
+  }
+
+  function update(dt) {
+    var j, k;
+    var ks = 380 * dt;
+    if (keys.left) P.tx -= ks; if (keys.right) P.tx += ks; if (keys.up) P.ty -= ks; if (keys.down) P.ty += ks;
+    P.tx = clamp(P.tx, 24, W - 60); P.ty = clamp(P.ty, 22, H - 22);
+    var f = Math.min(1, 14 * dt);
+    P.x += (P.tx - P.x) * f; P.y += (P.ty - P.y) * f;
+
+    if (invuln > 0) invuln -= dt;
+    if (shield > 0) shield -= dt;
+    if (bombCd > 0) bombCd -= dt;
+    if (bombFlash > 0) bombFlash -= dt;
+    if (shake > 0) shake = Math.max(0, shake - dt);
+    if (streak > 0) { comboT -= dt; if (comboT <= 0) streak = 0; }
+    if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+
+    P.fireT -= dt;
+    if (P.fireT <= 0) { firePlayer(); P.fireT = Math.max(0.09, 0.19 - weapon * 0.02); }
+
+    if (!boss) {
+      levelT += dt;
+      if (levelT < LEVEL_LEN || level % 3 !== 0) { if (levelT < LEVEL_LEN) director(dt); }
+      if (levelT >= LEVEL_LEN) {
+        if (level % 3 === 0) { if (!bossSpawned) spawnBoss(); }
+        else nextLevel();
+      }
+    }
+    if (boss) updateBoss(dt);
+    for (j = 0; j < en.length; j++) updateEnemy(en[j], dt);
+
+    for (j = pb.length - 1; j >= 0; j--) {
+      var b = pb[j]; b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x > W + 20 || b.y < -20 || b.y > H + 20) { pb.splice(j, 1); continue; }
+      var hit = false;
+      for (k = 0; k < en.length; k++) {
+        var e = en[k];
+        if (!e.dead && Math.hypot(b.x - e.x, b.y - e.y) < e.r + b.r) {
+          e.hp -= b.dmg; e.flash = 0.06; hit = true;
+          if (e.hp <= 0) killEnemy(e);
+          break;
+        }
+      }
+      if (!hit && boss && !boss.dying && Math.hypot(b.x - boss.x, b.y - boss.y) < boss.r + b.r) {
+        boss.hp -= b.dmg; boss.flash = 0.05; hit = true; score += 5; checkBossDead();
+      }
+      if (hit) pb.splice(j, 1);
+    }
+
+    for (j = eb.length - 1; j >= 0; j--) {
+      var q = eb[j]; q.x += q.vx * dt; q.y += q.vy * dt;
+      if (q.x < -20 || q.x > W + 20 || q.y < -20 || q.y > H + 20) { eb.splice(j, 1); continue; }
+      if (Math.hypot(q.x - P.x, q.y - P.y) < P.r + q.r) { eb.splice(j, 1); hurtPlayer(); if (state !== 'playing') return; }
+    }
+
+    for (j = 0; j < en.length; j++) {
+      var e2 = en[j];
+      if (!e2.dead && Math.hypot(e2.x - P.x, e2.y - P.y) < e2.r + P.r + 2) {
+        if (e2.type === 'drone' || e2.type === 'dart') killEnemy(e2); else { e2.hp -= 5; e2.flash = 0.1; if (e2.hp <= 0) killEnemy(e2); }
+        hurtPlayer(); if (state !== 'playing') return;
+      }
+    }
+    if (boss && !boss.dying && Math.hypot(boss.x - P.x, boss.y - P.y) < boss.r + P.r) { hurtPlayer(); if (state !== 'playing') return; }
+
+    for (j = pu.length - 1; j >= 0; j--) {
+      var u = pu[j]; u.t += dt; u.x -= 70 * dt; u.y += Math.sin(u.t * 3) * 20 * dt;
+      var d = Math.hypot(P.x - u.x, P.y - u.y);
+      if (d < 90 && d > 1) { u.x += (P.x - u.x) / d * 140 * dt; u.y += (P.y - u.y) / d * 140 * dt; }
+      if (d < u.r + 14) { collect(u); pu.splice(j, 1); continue; }
+      if (u.x < -30) pu.splice(j, 1);
+    }
+
+    en = en.filter(function (x) { return !x.dead; });
+    fxUpdate(dt);
+    hud();
+  }
+  function idle(dt) {
+    P.tx = 140 + Math.sin(time * 0.8) * 50; P.ty = H / 2 + Math.sin(time * 1.3) * 30;
+    P.x += (P.tx - P.x) * Math.min(1, 4 * dt); P.y += (P.ty - P.y) * Math.min(1, 4 * dt);
+    fxUpdate(dt);
+  }
+
+  /* ---------- drawing: background ---------- */
+  function palm(x, y, h, lean) {
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + lean * 0.3, y - h * 0.6, x + lean, y - h); ctx.stroke();
+    var tx = x + lean, ty = y - h, k;
+    for (k = 0; k < 6; k++) {
+      var a = -Math.PI / 2 + (k - 2.5) * 0.55;
+      ctx.beginPath(); ctx.moveTo(tx, ty);
+      ctx.quadraticCurveTo(tx + Math.cos(a) * 16, ty + Math.sin(a) * 16 - 6, tx + Math.cos(a) * 28, ty + Math.sin(a) * 28 + 6); ctx.stroke();
+    }
+  }
+  function drawBg() {
+    var j, x, g;
+    g = ctx.createLinearGradient(0, 0, 0, HOR);
+    g.addColorStop(0, rgba(cur.s0, 1)); g.addColorStop(0.6, rgba(cur.s1, 1)); g.addColorStop(1, rgba(cur.s2, 1));
+    ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, HOR + 22);
+
+    var starA = clamp((90 - (cur.s0[0] + cur.s0[1] + cur.s0[2]) / 3) / 70, 0, 1);
+    if (starA > 0.02) {
+      ctx.fillStyle = '#fff6e0';
+      for (j = 0; j < stars.length; j++) {
+        var st = stars[j], sx = ((st.x - bgScroll * 0.3 * st.z) % W + W) % W;
+        ctx.globalAlpha = starA * (0.5 + 0.5 * (reduce ? 1 : Math.sin(time * 2 + st.p)));
+        ctx.beginPath(); ctx.arc(sx, st.y, st.r, 0, 6.2832); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    var sg = ctx.createRadialGradient(W * 0.72, HOR - 30, 8, W * 0.72, HOR - 30, 130);
+    sg.addColorStop(0, rgba(cur.sun, 0.7)); sg.addColorStop(1, rgba(cur.sun, 0));
+    ctx.fillStyle = sg; ctx.fillRect(W * 0.72 - 130, HOR - 160, 260, 260);
+    ctx.fillStyle = rgba(cur.sun, 1); ctx.beginPath(); ctx.arc(W * 0.72, HOR - 30, 36, 0, 6.2832); ctx.fill();
+
+    ctx.fillStyle = rgba(cur.cloud, 0.28);
+    for (j = 0; j < bgClouds.length; j++) { var c = bgClouds[j]; ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w / 2, c.h / 2, 0, 0, 6.2832); ctx.fill(); }
+
+    var o1 = bgScroll * 0.15, o2 = bgScroll * 0.35;
+    ctx.fillStyle = rgba(cur.m1, 1); ctx.beginPath(); ctx.moveTo(-10, HOR + 2);
+    for (x = -10; x <= W + 10; x += 8) ctx.lineTo(x, HOR - 38 - (Math.sin((x + o1) * 0.012) * 22 + Math.sin((x + o1) * 0.031) * 10 + 20));
+    ctx.lineTo(W + 10, HOR + 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = rgba(cur.m2, 1); ctx.beginPath(); ctx.moveTo(-10, HOR + 2);
+    for (x = -10; x <= W + 10; x += 8) ctx.lineTo(x, HOR - 14 - (Math.sin((x + o2) * 0.02 + 2) * 14 + Math.sin((x + o2) * 0.05) * 6 + 10));
+    ctx.lineTo(W + 10, HOR + 2); ctx.closePath(); ctx.fill();
+
+    g = ctx.createLinearGradient(0, HOR, 0, H);
+    g.addColorStop(0, rgba(cur.sea1, 1)); g.addColorStop(0.35, rgba(cur.sea2, 1)); g.addColorStop(1, rgba(cur.sea2, 1));
+    ctx.fillStyle = g; ctx.fillRect(-20, HOR, W + 40, H - HOR + 20);
+
+    ctx.strokeStyle = rgba(cur.sun, 0.35); ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (j = 0; j < 7; j++) {
+      var wy = HOR + 6 + j * 14, ww = 60 - j * 6 + (reduce ? 0 : Math.sin(time * 2 + j) * 6);
+      ctx.beginPath(); ctx.moveTo(W * 0.72 - ww, wy); ctx.lineTo(W * 0.72 + ww, wy); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1.5;
+    for (j = 0; j < 6; j++) {
+      var yy = HOR + 22 + j * 20, offw = (bgScroll * (0.9 + j * 0.25) + j * 47) % 90;
+      ctx.beginPath();
+      for (x = -90; x < W + 90; x += 90) { ctx.moveTo(x - offw, yy); ctx.lineTo(x - offw + 24, yy); }
+      ctx.stroke();
+    }
+
+    var dark = [cur.m2[0] * 0.5, cur.m2[1] * 0.5, cur.m2[2] * 0.5], off = (bgScroll * 0.7) % 620;
+    ctx.fillStyle = rgba(dark, 1); ctx.strokeStyle = rgba(dark, 1); ctx.lineWidth = 3;
+    for (j = 0; j < 3; j++) {
+      var ix = j * 620 - off + 120;
+      ctx.beginPath(); ctx.ellipse(ix, HOR + 8, 90, 14, 0, 0, 6.2832); ctx.fill();
+      palm(ix - 40, HOR + 6, 54, -8); palm(ix + 8, HOR + 4, 70, 10); palm(ix + 48, HOR + 6, 46, 6);
+    }
+  }
+
+  /* ---------- drawing: sprites ---------- */
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); }
+  function poly(pts, fill) {
+    ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]);
+    for (var k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k + 1]);
+    ctx.closePath(); ctx.fill();
+  }
+  function drawPlayer() {
+    var x = P.x, y = P.y;
+    if (invuln > 0 && Math.sin(time * 36) > 0) ctx.globalAlpha = 0.35;
+    ctx.save(); ctx.translate(x, y);
+    var fl = 8 + Math.random() * 6;
+    poly([-17, -3, -17 - fl, 0, -17, 3], '#ffb23e'); poly([-17, -1.6, -17 - fl * 0.55, 0, -17, 1.6], '#fff3a0');
+    poly([4, -3, -9, -19, -16, -19, -9, -3], '#4a8fe0'); poly([4, 3, -9, 19, -16, 19, -9, 3], '#4a8fe0');
+    poly([-12, -2, -18, -9, -20, -9, -17, -2], '#3a73bd'); poly([-12, 2, -18, 9, -20, 9, -17, 2], '#3a73bd');
+    poly([22, 0, 6, -6, -14, -7, -18, 0, -14, 7, 6, 6], '#e3ecf7');
+    poly([22, 0, 12, -3, 12, 3], '#b7c6dc');
+    ctx.fillStyle = '#7ff0ff'; ctx.beginPath(); ctx.ellipse(4, 0, 7, 3, 0, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#ff5470'; ctx.fillRect(-12, -1, 8, 2);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    if (shield > 0 && (shield > 2 || Math.sin(time * 20) > 0)) {
+      ctx.strokeStyle = 'rgba(88,230,255,.85)'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, y, 27 + Math.sin(time * 6) * 1.5, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = 'rgba(88,230,255,.12)'; circ(x, y, 27);
+    }
+  }
+  function drawEnemy(e) {
+    ctx.save(); ctx.translate(e.x, e.y);
+    var fl = e.flash > 0;
+    if (e.type === 'drone') {
+      ctx.fillStyle = fl ? '#fff' : '#ff7a3d'; ctx.beginPath(); ctx.ellipse(0, 0, 13, 7, 0, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = fl ? '#fff' : '#9a2a2a'; ctx.beginPath(); ctx.ellipse(0, -3, 7, 5, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#ffe08a'; circ(-3, -1, 2); circ(3, -1, 2);
+      ctx.strokeStyle = '#2a1030'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-10, -7); ctx.lineTo(-14, -12); ctx.moveTo(10, -7); ctx.lineTo(14, -12); ctx.stroke();
+    } else if (e.type === 'jet') {
+      poly([-18, 0, 8, -11, 14, -3, 14, 3, 8, 11], fl ? '#fff' : '#9a5ad8');
+      poly([-6, -4, 6, -16, 10, -16, 4, -3], fl ? '#fff' : '#6e3aa8'); poly([-6, 4, 6, 16, 10, 16, 4, 3], fl ? '#fff' : '#6e3aa8');
+      ctx.fillStyle = '#ffd0ff'; circ(-6, 0, 3);
+      poly([14, -2, 20 + Math.random() * 5, 0, 14, 2], '#ffb23e');
+    } else if (e.type === 'dart') {
+      var a = e.lock ? Math.atan2(e.vy, e.vx) : Math.PI;
+      ctx.rotate(a);
+      poly([14, 0, -10, -8, -6, 0, -10, 8], fl ? '#fff' : '#ffd23e');
+      poly([-6, 0, -16 - Math.random() * 6, 0, -8, 3], '#ff5470');
+      ctx.fillStyle = '#7a2a00'; circ(2, 0, 2.5);
+    } else if (e.type === 'ship') {
+      ctx.fillStyle = fl ? '#fff' : '#5a6a85'; ctx.beginPath(); ctx.ellipse(0, 0, 30, 15, 0, 0, 6.2832); ctx.fill();
+      poly([-30, 0, -16, -14, 14, -14, 26, 0, 14, 14, -16, 14], fl ? '#fff' : '#7487a6');
+      ctx.fillStyle = fl ? '#fff' : '#3a4558'; ctx.fillRect(-26, -4, 14, 8); ctx.fillRect(-34, -2, 12, 4);
+      ctx.fillStyle = '#ff5470'; circ(10, 0, 5); ctx.fillStyle = '#ffe0e6'; circ(9, -1, 2);
+    }
+    ctx.restore();
+  }
+  function drawBoss() {
+    var b = boss;
+    ctx.save(); ctx.translate(b.x, b.y);
+    if (b.dying && Math.sin(time * 40) > 0) ctx.translate(rnd(-3, 3), rnd(-3, 3));
+    var pulse = 1 + Math.sin(time * 4) * 0.025; ctx.scale(pulse, pulse);
+    var enr = b.hp < b.max * 0.5, k;
+    ctx.fillStyle = b.flash > 0 ? '#fff' : '#4a1a3a'; ctx.fillRect(-54, -34, 18, 14); ctx.fillRect(-54, 20, 18, 14);
+    ctx.fillStyle = '#ff5470'; circ(-54, -27, 4); circ(-54, 27, 4);
+    ctx.beginPath();
+    for (k = 0; k < 6; k++) { var a = k * 1.0472 + 0.5236; ctx.lineTo(Math.cos(a) * 46, Math.sin(a) * 46); }
+    ctx.closePath(); ctx.fillStyle = b.flash > 0 ? '#fff' : '#7a2a5a'; ctx.fill();
+    ctx.strokeStyle = '#ff9ad0'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#3a1230'; circ(0, 0, 29);
+    ctx.save(); ctx.rotate(-time * 0.6);
+    ctx.strokeStyle = '#a84a86'; ctx.lineWidth = 4;
+    for (k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(0, 0, 22, k * 2.0944, k * 2.0944 + 1.2); ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle = enr ? 'rgba(255,48,48,.35)' : 'rgba(255,178,62,.35)'; circ(0, 0, 17 + Math.sin(time * 6) * 2);
+    ctx.fillStyle = enr ? '#ff3030' : '#ffb23e'; circ(0, 0, 11);
+    ctx.fillStyle = '#fff3a0'; circ(-3, -3, 3.5);
+    ctx.restore();
+  }
+  function drawPickup(u) {
+    var col = u.type === 'P' ? '#ffb23e' : u.type === 'S' ? '#58e6ff' : u.type === 'B' ? '#ff5470' : '#5df0a0';
+    ctx.fillStyle = col; ctx.globalAlpha = 0.25; circ(u.x, u.y, u.r + 5 + Math.sin(u.t * 6) * 2);
+    ctx.globalAlpha = 1; ctx.fillStyle = col; circ(u.x, u.y, u.r);
+    ctx.fillStyle = '#10142a'; ctx.font = '400 14px "Bungee", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(u.type, u.x, u.y + 1); ctx.textBaseline = 'alphabetic';
+  }
+
+  function render() {
+    var j;
+    ctx.save();
+    if (shake > 0 && !reduce) ctx.translate(rnd(-1, 1) * shake * 14, rnd(-1, 1) * shake * 14);
+    drawBg();
+    for (j = 0; j < pu.length; j++) drawPickup(pu[j]);
+    for (j = 0; j < en.length; j++) drawEnemy(en[j]);
+    if (boss) drawBoss();
+    ctx.lineCap = 'round';
+    for (j = 0; j < pb.length; j++) {
+      var b = pb[j], tx = b.x - b.vx * 0.018, ty = b.y - b.vy * 0.018;
+      ctx.strokeStyle = 'rgba(255,178,62,.55)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = '#fff6c8'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (j = 0; j < eb.length; j++) {
+      var q = eb[j];
+      ctx.fillStyle = 'rgba(255,84,112,.3)'; circ(q.x, q.y, q.r + 3.5);
+      ctx.fillStyle = '#ff5470'; circ(q.x, q.y, q.r);
+      ctx.fillStyle = '#fff0f3'; circ(q.x, q.y, q.r * 0.45);
+    }
+    drawPlayer();
+    for (j = 0; j < rings.length; j++) {
+      var r = rings[j];
+      ctx.strokeStyle = 'rgba(255,230,160,' + Math.max(0, r.life / r.ml * 0.8).toFixed(2) + ')'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 6.2832); ctx.stroke();
+    }
+    for (j = 0; j < fx.length; j++) {
+      var f = fx[j]; ctx.globalAlpha = Math.max(0, f.life / f.max); ctx.fillStyle = f.c; circ(f.x, f.y, f.s);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center'; ctx.font = '400 15px "Bungee", "Arial Black", sans-serif'; ctx.lineJoin = 'round';
+    for (j = 0; j < floats.length; j++) {
+      var t = floats[j]; ctx.globalAlpha = Math.min(1, t.life * 2);
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(11,16,32,.85)'; ctx.strokeText(t.text, t.x, t.y);
+      ctx.fillStyle = t.c; ctx.fillText(t.text, t.x, t.y);
+    }
+    ctx.globalAlpha = 1;
+    if (bombFlash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.85, bombFlash * 1.4).toFixed(2) + ')'; ctx.fillRect(-20, -20, W + 40, H + 40); }
+    ctx.restore();
+
+    if (boss && !boss.dying) {
+      var bw = 300, bx = W / 2 - bw / 2;
+      ctx.fillStyle = 'rgba(11,16,32,.65)'; ctx.fillRect(bx - 2, 10, bw + 4, 12);
+      ctx.fillStyle = boss.hp < boss.max * 0.5 ? '#ff3030' : '#ffb23e'; ctx.fillRect(bx, 12, bw * Math.max(0, boss.hp / boss.max), 8);
+      ctx.fillStyle = '#eef2ff'; ctx.font = '400 11px "Bungee", "Arial Black", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(boss.name.toUpperCase(), W / 2, 38);
+    }
+    if (state === 'playing' && streak >= 5) {
+      ctx.fillStyle = '#ffd780'; ctx.font = '400 20px "Bungee", "Arial Black", sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('x' + Math.min(1 + Math.floor(streak / 5), 5) + ' KOMBO', 14, 30);
+    }
+    if (banner) {
+      var al = Math.min(1, banner.t * 1.5);
+      ctx.globalAlpha = al * 0.85; ctx.fillStyle = '#0b1020'; ctx.fillRect(0, H * 0.34, W, 84);
+      ctx.globalAlpha = al; ctx.fillStyle = '#ffb23e'; ctx.textAlign = 'center'; ctx.font = '400 34px "Bungee", "Arial Black", sans-serif'; ctx.fillText(banner.text, W / 2, H * 0.34 + 40);
+      ctx.fillStyle = '#eef2ff'; ctx.font = '700 15px "DM Sans", Arial, sans-serif'; ctx.fillText(banner.sub, W / 2, H * 0.34 + 66);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* ---------- loop ---------- */
+  var lastT = 0;
+  function frame(t) {
+    var dt = Math.min(0.033, (t - lastT) / 1000);
+    if (!(dt > 0)) dt = 0.016;
+    lastT = t; time += dt;
+    if (state !== 'paused') { bgUpdate(dt); lerpPal(dt); }
+    if (state === 'playing') update(dt);
+    else if (state !== 'paused') idle(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- input ---------- */
+  var keyMap = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+  window.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var m = keyMap[e.code];
+    if (m) { if (state === 'playing') { keys[m] = true; e.preventDefault(); } return; }
+    if (e.code === 'KeyB' || e.code === 'KeyX' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') { useBomb(); return; }
+    if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
+    if (e.code === 'Space' || e.code === 'Enter') {
+      var t = e.target;
+      if (t && t.tagName === 'BUTTON') return;
+      e.preventDefault();
+      if (state !== 'playing') onGo();
+    }
+  });
+  window.addEventListener('keyup', function (e) { var m = keyMap[e.code]; if (m) keys[m] = false; });
+  window.addEventListener('blur', function () { clearKeys(); if (state === 'playing') togglePause(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && state === 'playing') togglePause(); });
+
+  var drag = null;
+  function pos(e) {
+    var r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height, k: W / r.width };
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    if (state !== 'playing') return;
+    var q = pos(e);
+    if (e.pointerType === 'mouse') { P.tx = q.x; P.ty = q.y; return; }
+    if (drag) return;
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    drag = { id: e.pointerId, cx: e.clientX, cy: e.clientY, sx: P.tx, sy: P.ty, k: q.k };
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (state !== 'playing') return;
+    if (e.pointerType === 'mouse') { var q = pos(e); P.tx = q.x; P.ty = q.y; return; }
+    if (drag && drag.id === e.pointerId) {
+      P.tx = drag.sx + (e.clientX - drag.cx) * drag.k * 1.3;
+      P.ty = drag.sy + (e.clientY - drag.cy) * drag.k * 1.3;
+    }
+  });
+  function endDrag(e) { if (drag && drag.id === e.pointerId) drag = null; }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+
+  el.bomb.addEventListener('pointerdown', function (e) { e.preventDefault(); useBomb(); });
+  el.go.addEventListener('click', onGo);
+  el.pause.addEventListener('click', togglePause);
+  el.snd.addEventListener('click', function () {
+    muted = !muted;
+    el.snd.textContent = 'Suara: ' + (muted ? 'mati' : 'nyala');
+    initAudio();
+  });
+
+  hud();
+  showOverlay('ready');
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
